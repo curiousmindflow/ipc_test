@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  */
 #include <linux/ioport.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
+#include <linux/version.h>
 
 #include "ipc-os.h"
 #include "ipc-hw.h"
@@ -40,7 +41,7 @@ struct ipc_os_priv {
 	uintptr_t remote_phys_shm;
 	uintptr_t local_virt_shm;
 	uintptr_t remote_virt_shm;
-	int (*rx_cb)(int budget);
+	int (*rx_cb)(const uint8_t instance, int budget);
 	int irq_num;
 };
 
@@ -48,18 +49,23 @@ struct ipc_os_priv {
 static struct ipc_os_priv priv;
 
 static void ipc_shm_softirq(unsigned long arg);
-static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, IPC_SOFTIRQ_BUDGET);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0)
+static DECLARE_TASKLET(ipc_shm_rx_tasklet, ipc_shm_softirq, 0);
+#else
+static DECLARE_TASKLET_OLD(ipc_shm_rx_tasklet, ipc_shm_softirq);
+#endif
 
 /* sotfirq routine for deferred interrupt handling */
-static void ipc_shm_softirq(unsigned long budget)
+static void ipc_shm_softirq(unsigned long arg)
 {
 	int work = 0;
+	unsigned long budget = IPC_SOFTIRQ_BUDGET;
 
-	work = priv.rx_cb(budget);
+	work = priv.rx_cb(0, budget);
 
 	if (work < budget) {
 		/* work done, re-enable irq */
-		ipc_hw_irq_enable();
+		ipc_hw_irq_enable(0);
 	} else {
 		/* work not done, reschedule softirq */
 		tasklet_schedule(&ipc_shm_rx_tasklet);
@@ -69,8 +75,8 @@ static void ipc_shm_softirq(unsigned long budget)
 /* driver interrupt service routine */
 static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
 {
-	ipc_hw_irq_disable();
-	ipc_hw_irq_clear();
+	ipc_hw_irq_disable(0);
+	ipc_hw_irq_clear(0);
 
 	tasklet_schedule(&ipc_shm_rx_tasklet);
 
@@ -84,13 +90,18 @@ static irqreturn_t ipc_shm_hardirq(int irq, void *dev)
  *
  * Return: 0 on success, error code otherwise
  */
-int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
+int ipc_os_init(const uint8_t instance, const struct ipc_shm_cfg *cfg,
+		int (*rx_cb)(const uint8_t, int))
 {
 	struct device_node *mscm = NULL;
 	struct resource *res;
 	int err;
 
 	if (!rx_cb)
+		return -EINVAL;
+
+	/* multi-instance is not yet implemented */
+	if (instance > 1)
 		return -EINVAL;
 
 	/* save params */
@@ -138,7 +149,7 @@ int ipc_os_init(const struct ipc_shm_cfg *cfg, int (*rx_cb)(int))
 		goto err_unmap_remote_shm;
 	}
 
-	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq());
+	priv.irq_num = of_irq_get(mscm, ipc_hw_get_rx_irq(instance));
 	shm_dbg("Rx IRQ = %d\n", priv.irq_num);
 	of_node_put(mscm); /* release refcount to mscm DT node */
 
@@ -166,10 +177,10 @@ err_release_local_region:
 /**
  * ipc_os_free() - free OS specific resources
  */
-void ipc_os_free(void)
+void ipc_os_free(const uint8_t instance)
 {
 	/* disable hardirq */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
 
 	/* kill softirq task */
 	tasklet_kill(&ipc_shm_rx_tasklet);
@@ -184,7 +195,7 @@ void ipc_os_free(void)
 /**
  * ipc_os_get_local_shm() - get local shared mem address
  */
-uintptr_t ipc_os_get_local_shm(void)
+uintptr_t ipc_os_get_local_shm(const uint8_t instance)
 {
 	return priv.local_virt_shm;
 }
@@ -192,7 +203,7 @@ uintptr_t ipc_os_get_local_shm(void)
 /**
  * ipc_os_get_remote_shm() - get remote shared mem address
  */
-uintptr_t ipc_os_get_remote_shm(void)
+uintptr_t ipc_os_get_remote_shm(const uint8_t instance)
 {
 	return priv.remote_virt_shm;
 }
@@ -235,6 +246,18 @@ void ipc_os_unmap_intc(void *addr)
 	iounmap(addr);
 }
 
+/**
+ * ipc_os_poll_channels() - invoke rx callback configured at initialization
+ *
+ * Not implemented for Linux.
+ *
+ * Return: work done, error code otherwise
+ */
+int ipc_os_poll_channels(const uint8_t instance)
+{
+	return -EOPNOTSUPP;
+}
+
 /* module init function */
 static int __init shm_mod_init(void)
 {
@@ -256,6 +279,7 @@ EXPORT_SYMBOL(ipc_shm_tx);
 EXPORT_SYMBOL(ipc_shm_unmanaged_acquire);
 EXPORT_SYMBOL(ipc_shm_unmanaged_tx);
 EXPORT_SYMBOL(ipc_shm_is_remote_ready);
+EXPORT_SYMBOL(ipc_shm_poll_channels);
 
 module_init(shm_mod_init);
 module_exit(shm_mod_exit);

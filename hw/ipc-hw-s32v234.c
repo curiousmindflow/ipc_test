@@ -1,15 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2021 NXP
  */
 #include <linux/io.h>
 
 #include "ipc-shm.h"
 #include "ipc-os.h"
 #include "ipc-hw.h"
-
-/* Hardware IP Block Base Addresses - TODO: get them from device tree */
-#define MSCM_BASE    0x40081000ul /* Miscellaneous System Control Module */
 
 /* S32V234 Processor IDs */
 enum s32v234_processor_idx {
@@ -19,6 +16,15 @@ enum s32v234_processor_idx {
 
 /* S32V234 Specific Definitions */
 #define DEFAULT_REMOTE_CORE    M4
+#define IRQ_ID_MIN             0
+#define IRQ_ID_MAX             3
+
+/* MSCM registers count for S32V234 */
+#define MSCM_CPnCFG_COUNT      4
+#define MSCM_OCMDR_COUNT       4
+#define MSCM_IRSPRC_COUNT      175
+#define MSCM_IPCE_COUNT        4
+#define MSCM_IPCIE_COUNT       4
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -62,19 +68,19 @@ struct mscm_regs {
 	volatile const uint32_t cpxnum;
 	volatile const uint32_t cpxmaster;
 	volatile const uint32_t cpxcount;
-	volatile const uint32_t cpxcfg[4];
+	volatile const uint32_t cpxcfg[MSCM_CPnCFG_COUNT];
 	volatile const uint32_t cp0type;
 	volatile const uint32_t cp0num;
 	volatile const uint32_t cp0master;
 	volatile const uint32_t cp0count;
-	volatile const uint32_t cp0cfg[4];
+	volatile const uint32_t cp0cfg[MSCM_CPnCFG_COUNT];
 	volatile const uint32_t cp1type;
 	volatile const uint32_t cp1num;
 	volatile const uint32_t cp1master;
 	volatile const uint32_t cp1count;
-	volatile const uint32_t cp1cfg[4];
+	volatile const uint32_t cp1cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved00[928]; /* 0x3A8 */
-	volatile uint32_t ocmdr[4];
+	volatile uint32_t ocmdr[MSCM_OCMDR_COUNT];
 	uint8_t reserved01[112]; /* 0x70 */
 	volatile uint32_t tcmdr0;
 	uint8_t reserved02[124]; /* 0x7C */
@@ -85,24 +91,24 @@ struct mscm_regs {
 	uint8_t reserved04[24]; /* 0x18 */
 	volatile uint32_t ircpgir;
 	uint8_t reserved05[92]; /* 0x5C */
-	volatile uint16_t irsprc[175];
+	volatile uint16_t irsprc[MSCM_IRSPRC_COUNT];
 	uint8_t reserved06[800]; /* 0x320 */
 	volatile uint32_t ipcge;
 	uint8_t reserved07[12]; /* 0xC */
-	volatile uint32_t ipce[4];
+	volatile uint32_t ipce[MSCM_IPCE_COUNT];
 	uint8_t reserved08[32]; /* 0x20 */
 	volatile uint32_t ipcgie;
 	uint8_t reserved09[12]; /* 0xC */
-	volatile uint32_t ipcie[4];
+	volatile uint32_t ipcie[MSCM_IPCIE_COUNT];
 };
 
 /* MSCM Hardware Register Bit Fields Definitions */
 
 #define MSCM_IRCPxIR_INT(n)    (1u << n) /* Interrupt Router CPx Interrupt n */
 
-#define MSCM_IRCPGIR_TLF_MASK      0x03000000ul /* Target List Field */
-#define MSCM_IRCPGIR_CPUTL_MASK    0x000F0000ul /* CPU Target List */
-#define MSCM_IRCPGIR_INTID_MASK    0x00000003ul /* Interrupt MSCM ID */
+#define MSCM_IRCPGIR_TLF_MASK      0x03000000uL /* Target List Field */
+#define MSCM_IRCPGIR_CPUTL_MASK    0x000F0000uL /* CPU Target List */
+#define MSCM_IRCPGIR_INTID_MASK    0x00000003uL /* Interrupt MSCM ID */
 
 #define MSCM_IRCPGIR_TLF(n)      ((n << 24u) & MSCM_IRCPGIR_TLF_MASK)
 #define MSCM_IRCPGIR_CPUTL(n)    (((1u << n) << 16u) & MSCM_IRCPGIR_CPUTL_MASK)
@@ -138,7 +144,7 @@ static struct ipc_hw_priv {
  *
  * Return: MSCM inter-core interrupt index used for Rx
  */
-int ipc_hw_get_rx_irq(void)
+int ipc_hw_get_rx_irq(const uint8_t instance)
 {
 	return priv.mscm_rx_irq;
 }
@@ -148,21 +154,25 @@ int ipc_hw_get_rx_irq(void)
  *
  * @cfg:    configuration parameters
  *
- * inter_core_tx_irq and inter_core_rx_irq are not allowed to have the same
- * value to avoid possible race conditions when updating the value of the
- * IRSPRCn register. If the value IPC_CORE_DEFAULT is passed as remote_core,
- * the default value defined for the selected platform will be used instead.
+ * inter_core_tx_irq can be disabled by passing IPC_IRQ_NONE, if polling is
+ * desired in transmit notification path. inter_core_tx_irq and
+ * inter_core_rx_irq are not allowed to have the same value to avoid possible
+ * race conditions when updating the value of the IRSPRCn register.
+ * If the value IPC_CORE_DEFAULT is passed as remote_core, the default value
+ * defined for the selected platform will be used instead. local_core value has
+ * no effect for this platform.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
  *         invalid remote core, -ENOMEM for failing to map MSCM address space
  */
-int ipc_hw_init(const struct ipc_shm_cfg *cfg)
+int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, addr);
+	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
+			cfg->inter_core_rx_irq, &cfg->remote_core,
+			&cfg->local_core, addr);
 }
 
 /**
@@ -170,10 +180,12 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int _ipc_hw_init(int tx_irq, int rx_irq,
+int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		 const struct ipc_shm_remote_core *remote_core,
-		 void *mscm_addr)
+		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
 {
+	(void)local_core; /* unused */
+
 	if (!mscm_addr)
 		return -EINVAL;
 
@@ -185,22 +197,22 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 		return -EINVAL;
 	}
 
-	priv.remote_core = DEFAULT_REMOTE_CORE;
-
-	if (tx_irq < 0 || tx_irq > 3
-		|| rx_irq < 0 || rx_irq > 3
-		|| rx_irq == tx_irq) {
+	if (((tx_irq != IPC_IRQ_NONE)
+			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
+		|| (rx_irq < IRQ_ID_MIN) || (rx_irq > IRQ_ID_MAX)
+		|| (rx_irq == tx_irq)) {
 		return -EINVAL;
 	}
 
 	priv.mscm_tx_irq = tx_irq;
 	priv.mscm_rx_irq = rx_irq;
+	priv.remote_core = DEFAULT_REMOTE_CORE;
 
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
 	 */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
 
 	return 0;
 }
@@ -208,9 +220,9 @@ int _ipc_hw_init(int tx_irq, int rx_irq,
 /**
  * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
-void ipc_hw_free(void)
+void ipc_hw_free(const uint8_t instance)
 {
-	ipc_hw_irq_clear();
+	ipc_hw_irq_clear(instance);
 
 	/* unmap MSCM hardware peripheral block */
 	ipc_os_unmap_intc(priv.mscm);
@@ -219,7 +231,7 @@ void ipc_hw_free(void)
 /**
  * ipc_hw_irq_enable() - enable notifications from remote
  */
-void ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -232,7 +244,7 @@ void ipc_hw_irq_enable(void)
 /**
  * ipc_hw_irq_disable() - disable notifications from remote
  */
-void ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -245,8 +257,11 @@ void ipc_hw_irq_disable(void)
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
  */
-void ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(const uint8_t instance)
 {
+	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
+		return;
+
 	/* trigger MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPGIR_TLF(MSCM_IRCPGIR_TLF_CPUTL) |
 			MSCM_IRCPGIR_CPUTL(priv.remote_core) |
@@ -257,7 +272,7 @@ void ipc_hw_irq_notify(void)
 /**
  * ipc_hw_irq_clear() - clear available data notification
  */
-void ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(const uint8_t instance)
 {
 	/* clear MSCM core-to-core directed interrupt */
 	writel_relaxed(MSCM_IRCPxIR_INT(priv.mscm_rx_irq),

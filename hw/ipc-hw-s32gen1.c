@@ -1,15 +1,12 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
 /*
- * Copyright 2018-2019 NXP
+ * Copyright 2018-2019,2021 NXP
  */
 #include <linux/io.h>
 
 #include "ipc-shm.h"
 #include "ipc-os.h"
 #include "ipc-hw.h"
-
-/* Hardware IP Block Base Addresses - TODO: get them from device tree */
-#define MSCM_BASE    0x40198000ul /* Miscellaneous System Control Module */
 
 /* S32gen1 Processor IDs */
 enum s32gen1_processor_idx {
@@ -24,6 +21,15 @@ enum s32gen1_processor_idx {
 
 /* S32gen1 Specific Definitions */
 #define DEFAULT_REMOTE_CORE    M7_0
+#define DEFAULT_LOCAL_CORE     A53_0  /* default core targeted by remote */
+#define IRQ_ID_MIN             0
+#define IRQ_ID_MAX             2
+
+/* MSCM registers count for S32gen1 */
+#define MSCM_CPnCFG_COUNT      4
+#define MSCM_CP_COUNT          7
+#define MSCM_IRQ_COUNT         4
+#define MSCM_IRSPRC_COUNT      240
 
 /**
  * struct mscm_regs - MSCM Peripheral Register Structure
@@ -183,121 +189,77 @@ struct mscm_regs {
 	volatile const uint32_t cpxtype;
 	volatile const uint32_t cpxnum;
 	volatile const uint32_t cpxrev;
-	volatile const uint32_t cpxcfg[4];
+	volatile const uint32_t cpxcfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved00[4]; /* 0x4 */
 	volatile const uint32_t cp0type;
 	volatile const uint32_t cp0num;
 	volatile const uint32_t cp0rev;
-	volatile const uint32_t cp0cfg[4];
+	volatile const uint32_t cp0cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved01[4]; /* 0x4 */
 	volatile const uint32_t cp1type;
 	volatile const uint32_t cp1num;
 	volatile const uint32_t cp1rev;
-	volatile const uint32_t cp1cfg[4];
+	volatile const uint32_t cp1cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved02[4]; /* 0x4 */
 	volatile const uint32_t cp2type;
 	volatile const uint32_t cp2num;
 	volatile const uint32_t cp2rev;
-	volatile const uint32_t cp2cfg[4];
+	volatile const uint32_t cp2cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved03[4]; /* 0x4 */
 	volatile const uint32_t cp3type;
 	volatile const uint32_t cp3num;
 	volatile const uint32_t cp3rev;
-	volatile const uint32_t cp3cfg[4];
+	volatile const uint32_t cp3cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved04[4]; /* 0x4 */
 	volatile const uint32_t cp4type;
 	volatile const uint32_t cp4num;
 	volatile const uint32_t cp4rev;
-	volatile const uint32_t cp4cfg[4];
+	volatile const uint32_t cp4cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved05[4]; /* 0x4 */
 	volatile const uint32_t cp5type;
 	volatile const uint32_t cp5num;
 	volatile const uint32_t cp5rev;
-	volatile const uint32_t cp5cfg[4];
+	volatile const uint32_t cp5cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved06[4]; /* 0x4 */
 	volatile const uint32_t cp6type;
 	volatile const uint32_t cp6num;
 	volatile const uint32_t cp6rev;
-	volatile const uint32_t cp6cfg[4];
+	volatile const uint32_t cp6cfg[MSCM_CPnCFG_COUNT];
 	uint8_t reserved07[260]; /* 0x104 */
-	volatile uint32_t ircp0isr0;
-	volatile uint32_t ircp0igr0;
-	volatile uint32_t ircp0isr1;
-	volatile uint32_t ircp0igr1;
-	volatile uint32_t ircp0isr2;
-	volatile uint32_t ircp0igr2;
-	volatile uint32_t ircp0isr3;
-	volatile uint32_t ircp0igr3;
-	volatile uint32_t ircp1isr0;
-	volatile uint32_t ircp1igr0;
-	volatile uint32_t ircp1isr1;
-	volatile uint32_t ircp1igr1;
-	volatile uint32_t ircp1isr2;
-	volatile uint32_t ircp1igr2;
-	volatile uint32_t ircp1isr3;
-	volatile uint32_t ircp1igr3;
-	volatile uint32_t ircp2isr0;
-	volatile uint32_t ircp2igr0;
-	volatile uint32_t ircp2isr1;
-	volatile uint32_t ircp2igr1;
-	volatile uint32_t ircp2isr2;
-	volatile uint32_t ircp2igr2;
-	volatile uint32_t ircp2isr3;
-	volatile uint32_t ircp2igr3;
-	volatile uint32_t ircp3isr0;
-	volatile uint32_t ircp3igr0;
-	volatile uint32_t ircp3isr1;
-	volatile uint32_t ircp3igr1;
-	volatile uint32_t ircp3isr2;
-	volatile uint32_t ircp3igr2;
-	volatile uint32_t ircp3isr3;
-	volatile uint32_t ircp3igr3;
-	volatile uint32_t ircp4isr0;
-	volatile uint32_t ircp4igr0;
-	volatile uint32_t ircp4isr1;
-	volatile uint32_t ircp4igr1;
-	volatile uint32_t ircp4isr2;
-	volatile uint32_t ircp4igr2;
-	volatile uint32_t ircp4isr3;
-	volatile uint32_t ircp4igr3;
-	volatile uint32_t ircp5isr0;
-	volatile uint32_t ircp5igr0;
-	volatile uint32_t ircp5isr1;
-	volatile uint32_t ircp5igr1;
-	volatile uint32_t ircp5isr2;
-	volatile uint32_t ircp5igr2;
-	volatile uint32_t ircp5isr3;
-	volatile uint32_t ircp5igr3;
-	volatile uint32_t ircp6isr0;
-	volatile uint32_t ircp6igr0;
-	volatile uint32_t ircp6isr1;
-	volatile uint32_t ircp6igr1;
-	volatile uint32_t ircp6isr2;
-	volatile uint32_t ircp6igr2;
-	volatile uint32_t ircp6isr3;
-	volatile uint32_t ircp6igr3;
+	struct {
+		volatile uint32_t isr;
+		volatile uint32_t igr;
+	} ircpnirx[MSCM_CP_COUNT][MSCM_IRQ_COUNT];
 	uint8_t reserved08[288]; /* 0x120 */
 	volatile uint32_t ircpcfg;
 	uint8_t reserved09[1020]; /* 0x3FC */
 	volatile uint32_t irnmic;
 	uint8_t reserved10[124]; /* 0x7C */
-	volatile uint16_t irsprc[240];
+	volatile uint16_t irsprc[MSCM_IRSPRC_COUNT];
 };
 
 /* MSCM Hardware Register Bit Fields Definitions */
 
-#define MSCM_IRCPnISRn_CP0_INT    0x01ul /* Processor 0 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP1_INT    0x02ul /* Processor 1 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP2_INT    0x04ul /* Processor 2 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP3_INT    0x08ul /* Processor 3 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP4_INT    0x10ul /* Processor 4 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP5_INT    0x20ul /* Processor 5 Interrupt Mask */
-#define MSCM_IRCPnISRn_CP6_INT    0x40ul /* Processor 6 Interrupt Mask */
-#define MSCM_IRCPnISRn_CPx_INT    0x7Ful /* All Processors Interrupt Mask */
+#define MSCM_IRCPnISRn_CP0_INT    0x01uL /* Processor 0 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP1_INT    0x02uL /* Processor 1 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP2_INT    0x04uL /* Processor 2 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP3_INT    0x08uL /* Processor 3 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP4_INT    0x10uL /* Processor 4 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP5_INT    0x20uL /* Processor 5 Interrupt Mask */
+#define MSCM_IRCPnISRn_CP6_INT    0x40uL /* Processor 6 Interrupt Mask */
+#define MSCM_IRCPnISRn_CPx_INT    0x7FuL /* All Processors Interrupt Mask */
 
-#define MSCM_IRCPnIGRn_INT_EN    0x1ul /* Interrupt Enable */
+#define MSCM_IRCPnIGRn_INT_EN    0x1uL /* Interrupt Enable */
 
-#define MSCM_IRCPCFG_LOCK    0x80000000ul /* Interrupt Router Config Lock Bit */
+#define MSCM_IRCPCFG_LOCK    0x80000000uL /* Interrupt Router Config Lock Bit */
+#define MSCM_IRCPCFG_CP0_TR  0x01uL /* Processor 0 Trusted core */
+#define MSCM_IRCPCFG_CP1_TR  0x02uL /* Processor 1 Trusted core */
+#define MSCM_IRCPCFG_CP2_TR  0x04uL /* Processor 2 Trusted core */
+#define MSCM_IRCPCFG_CP3_TR  0x08uL /* Processor 3 Trusted core */
+#define MSCM_IRCPCFG_CP4_TR  0x10uL /* Processor 4 Trusted core */
+#define MSCM_IRCPCFG_CP5_TR  0x20uL /* Processor 5 Trusted core */
+#define MSCM_IRCPCFG_CP6_TR  0x40uL /* Processor 6 Trusted core */
+#define MSCM_IRCPCFG_A53_TR  0x0FuL /* Processors 0 to 3 Trusted cores */
 
 #define MSCM_IRSPRCn_LOCK    0x8000u /* Interrupt Routing Control Lock Bit */
 
@@ -314,13 +276,15 @@ struct mscm_regs {
  *
  * @mscm_tx_irq:    MSCM inter-core interrupt reserved for shm driver tx
  * @mscm_rx_irq:    MSCM inter-core interrupt reserved for shm driver rx
- * @remote_core:    remote core to trigger the interrupt on
+ * @remote_core:    index of remote core to trigger the interrupt on
+ * @local_core:     index of the local core targeted by remote
  * @mscm:           pointer to memory-mapped hardware peripheral MSCM
  */
 static struct ipc_hw_priv {
 	int mscm_tx_irq;
 	int mscm_rx_irq;
 	int remote_core;
+	int local_core;
 	struct mscm_regs *mscm;
 } priv;
 
@@ -329,7 +293,7 @@ static struct ipc_hw_priv {
  *
  * Return: MSCM inter-core interrupt index used for Rx
  */
-int ipc_hw_get_rx_irq(void)
+int ipc_hw_get_rx_irq(const uint8_t instance)
 {
 	return priv.mscm_rx_irq;
 }
@@ -339,21 +303,25 @@ int ipc_hw_get_rx_irq(void)
  *
  * @cfg:    configuration parameters
  *
- * inter_core_tx_irq and inter_core_rx_irq are not allowed to have the same
- * value to avoid possible race conditions when updating the value of the
- * IRSPRCn register. If the value IPC_CORE_DEFAULT is passed as remote_core,
- * the default value defined for the selected platform will be used instead.
+ * inter_core_tx_irq can be disabled by passing IPC_IRQ_NONE, if polling is
+ * desired in transmit notification path. inter_core_tx_irq and
+ * inter_core_rx_irq are not allowed to have the same value to avoid possible
+ * race conditions when updating the value of the IRSPRCn register.
+ * If the value IPC_CORE_DEFAULT is passed as local_core or remote_core, the
+ * default value defined for the selected platform will be used instead.
  *
  * Return: 0 for success, -EINVAL for either inter core interrupt invalid or
- *         invalid remote core, -ENOMEM for failing to map MSCM address space
+ *         invalid remote core, -ENOMEM for failing to map MSCM address space,
+ *         -EACCES for failing to access MSCM registers
  */
-int ipc_hw_init(const struct ipc_shm_cfg *cfg)
+int ipc_hw_init(const uint8_t instance, const struct ipc_shm_cfg *cfg)
 {
 	/* map MSCM hardware peripheral block registers */
 	void *addr = ipc_os_map_intc();
 
-	return _ipc_hw_init(cfg->inter_core_tx_irq, cfg->inter_core_rx_irq,
-			    &cfg->remote_core, addr);
+	return _ipc_hw_init(instance, cfg->inter_core_tx_irq,
+			cfg->inter_core_rx_irq, &cfg->remote_core,
+			&cfg->local_core, addr);
 }
 
 /**
@@ -361,29 +329,66 @@ int ipc_hw_init(const struct ipc_shm_cfg *cfg)
  *
  * Low level variant of ipc_hw_init() used by UIO device implementation.
  */
-int _ipc_hw_init(int inter_core_tx_irq, int inter_core_rx_irq,
+int _ipc_hw_init(const uint8_t instance, int tx_irq, int rx_irq,
 		 const struct ipc_shm_remote_core *remote_core,
-		 void *mscm_addr)
+		 const struct ipc_shm_local_core *local_core, void *mscm_addr)
 {
+	int remote_core_idx;
+	int local_core_idx;
+	uint32_t ircpcfg_mask;
+
 	if (!mscm_addr)
 		return -EINVAL;
 
 	priv.mscm = (struct mscm_regs *)mscm_addr;
 
+	switch (local_core->type) {
+	case IPC_CORE_A53:
+		switch (local_core->index) {
+		case IPC_CORE_INDEX_0:
+			local_core_idx = A53_0;
+			break;
+		case IPC_CORE_INDEX_1:
+			local_core_idx = A53_1;
+			break;
+		case IPC_CORE_INDEX_2:
+			local_core_idx = A53_2;
+			break;
+		case IPC_CORE_INDEX_3:
+			local_core_idx = A53_3;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	case IPC_CORE_DEFAULT:
+		local_core_idx = DEFAULT_LOCAL_CORE;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* check trusted cores mask contains the targeted and other A53 cores */
+	if ((!local_core->trusted)
+		|| (local_core->trusted & ~MSCM_IRCPCFG_A53_TR)
+		|| ((0x01uL << local_core_idx) & ~local_core->trusted)) {
+		return -EINVAL;
+	}
+
 	switch (remote_core->type) {
 	case IPC_CORE_A53:
 		switch (remote_core->index) {
-		case 0:
-			priv.remote_core = A53_0;
+		case IPC_CORE_INDEX_0:
+			remote_core_idx = A53_0;
 			break;
-		case 1:
-			priv.remote_core = A53_1;
+		case IPC_CORE_INDEX_1:
+			remote_core_idx = A53_1;
 			break;
-		case 2:
-			priv.remote_core = A53_2;
+		case IPC_CORE_INDEX_2:
+			remote_core_idx = A53_2;
 			break;
-		case 3:
-			priv.remote_core = A53_3;
+		case IPC_CORE_INDEX_3:
+			remote_core_idx = A53_3;
 			break;
 		default:
 			return -EINVAL;
@@ -391,41 +396,55 @@ int _ipc_hw_init(int inter_core_tx_irq, int inter_core_rx_irq,
 		break;
 	case IPC_CORE_M7:
 		switch (remote_core->index) {
-		case 0:
-			priv.remote_core = M7_0;
+		case IPC_CORE_INDEX_0:
+			remote_core_idx = M7_0;
 			break;
-		case 1:
-			priv.remote_core = M7_1;
+		case IPC_CORE_INDEX_1:
+			remote_core_idx = M7_1;
 			break;
-		case 2:
-			priv.remote_core = M7_2;
+		case IPC_CORE_INDEX_2:
+			remote_core_idx = M7_2;
 			break;
 		default:
 			return -EINVAL;
 		}
 		break;
 	case IPC_CORE_DEFAULT:
-		priv.remote_core = DEFAULT_REMOTE_CORE;
+		remote_core_idx = DEFAULT_REMOTE_CORE;
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	priv.mscm_tx_irq = inter_core_tx_irq;
-	priv.mscm_rx_irq = inter_core_rx_irq;
-
-	if (priv.mscm_tx_irq < 0 || priv.mscm_tx_irq > 2
-		|| priv.mscm_rx_irq < 0 || priv.mscm_rx_irq > 2
-		|| priv.mscm_rx_irq == priv.mscm_tx_irq
-		|| priv.remote_core == readl_relaxed(&priv.mscm->cpxnum)) {
+	if (((tx_irq != IPC_IRQ_NONE)
+			&& ((tx_irq < IRQ_ID_MIN) || (tx_irq > IRQ_ID_MAX)))
+		|| (rx_irq < IRQ_ID_MIN || rx_irq > IRQ_ID_MAX)
+		|| (rx_irq == tx_irq)
+		|| (remote_core_idx == readl_relaxed(&priv.mscm->cpxnum))
+		|| (remote_core_idx == local_core_idx)) {
 		return -EINVAL;
 	}
+
+	priv.mscm_tx_irq = tx_irq;
+	priv.mscm_rx_irq = rx_irq;
+	priv.remote_core = remote_core_idx;
+	priv.local_core = local_core_idx;
 
 	/*
 	 * disable rx irq source to avoid receiving an interrupt from remote
 	 * before any of the buffer rings are initialized
 	 */
-	ipc_hw_irq_disable();
+	ipc_hw_irq_disable(instance);
+
+	/*
+	 * enable local trusted cores so that they can read full contents of
+	 * IRCPnISRx registers
+	 */
+	ircpcfg_mask = readl_relaxed(&priv.mscm->ircpcfg);
+	if (ircpcfg_mask & MSCM_IRCPCFG_LOCK)
+		return -EACCES;
+
+	writel_relaxed(ircpcfg_mask | local_core->trusted, &priv.mscm->ircpcfg);
 
 	return 0;
 }
@@ -433,9 +452,9 @@ int _ipc_hw_init(int inter_core_tx_irq, int inter_core_rx_irq,
 /**
  * ipc_hw_free() - unmap MSCM IP block and clear irq
  */
-void ipc_hw_free(void)
+void ipc_hw_free(const uint8_t instance)
 {
-	ipc_hw_irq_clear();
+	ipc_hw_irq_clear(instance);
 
 	/* unmap MSCM hardware peripheral block */
 	ipc_os_unmap_intc(priv.mscm);
@@ -448,7 +467,7 @@ void ipc_hw_free(void)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
-void ipc_hw_irq_enable(void)
+void ipc_hw_irq_enable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -465,7 +484,7 @@ void ipc_hw_irq_enable(void)
  * of the first MSCM inter-core interrupt is 1. In order to obtain the correct
  * index for the interrupt routing register, this value is added to mscm_rx_irq.
  */
-void ipc_hw_irq_disable(void)
+void ipc_hw_irq_disable(const uint8_t instance)
 {
 	uint16_t irsprc_mask;
 
@@ -478,226 +497,22 @@ void ipc_hw_irq_disable(void)
 /**
  * ipc_hw_irq_notify() - notify remote that data is available
  */
-void ipc_hw_irq_notify(void)
+void ipc_hw_irq_notify(const uint8_t instance)
 {
-	/* trigger MSCM core-to-core directed interrupt */
-	switch (priv.remote_core) {
-	case A53_0:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp0igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp0igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp0igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_1:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp1igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp1igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp1igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_2:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp2igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp2igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp2igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_3:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp3igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp3igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp3igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case M7_0:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp4igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp4igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp4igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case M7_1:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp5igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp5igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp5igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case M7_2:
-		switch (priv.mscm_tx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp6igr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp6igr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
-					&priv.mscm->ircp6igr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	default:
+	if (priv.mscm_tx_irq == IPC_IRQ_NONE)
 		return;
-	}
+
+	/* trigger MSCM core-to-core directed interrupt */
+	writel_relaxed(MSCM_IRCPnIGRn_INT_EN,
+		&priv.mscm->ircpnirx[priv.remote_core][priv.mscm_tx_irq].igr);
 }
 
 /**
  * ipc_hw_irq_clear() - clear available data notification
  */
-void ipc_hw_irq_clear(void)
+void ipc_hw_irq_clear(const uint8_t instance)
 {
-	int current_cpu;
-
-	/* get current processor id */
-	current_cpu = readl_relaxed(&priv.mscm->cpxnum);
-
-	/* clear MSCM core-to-core directed interrupt */
-	switch (current_cpu) {
-	case A53_0:
-		switch (priv.mscm_rx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp0isr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp0isr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp0isr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_1:
-		switch (priv.mscm_rx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp1isr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp1isr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp1isr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_2:
-		switch (priv.mscm_rx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp2isr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp2isr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp2isr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	case A53_3:
-		switch (priv.mscm_rx_irq) {
-		case 0:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp3isr0);
-			break;
-		case 1:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp3isr1);
-			break;
-		case 2:
-			writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
-					&priv.mscm->ircp3isr2);
-			break;
-		default:
-			return;
-		}
-		break;
-	default:
-		return;
-	}
+	/* clear MSCM core-to-core directed interrupt on the targeted core */
+	writel_relaxed(MSCM_IRCPnISRn_CPx_INT,
+		&priv.mscm->ircpnirx[priv.local_core][priv.mscm_rx_irq].isr);
 }

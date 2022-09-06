@@ -4,21 +4,28 @@
 IPCF Shared Memory Sample Application for Linux
 ===============================================
 
-:Copyright: 2018-2020 NXP
+:Copyright: 2018-2021 NXP
 
 Overview
 ========
 This sample application is a kernel module that demonstrates a ping-pong message
 communication with an RTOS application, using the shared memory driver.
 
-The sample app initializes the shared memory driver and sends messages to the
-remote app, waiting for a reply after each message is sent. When a reply is
-received from remote app, it wakes up and sends another message. The Linux app
-is controlled from console via a sysfs file (see Running the Application).
+The application initializes the shared memory driver and sends messages to the
+remote application, waiting for a reply after each message is sent. When a reply
+is received from remote application, it wakes up and sends another message.
+
+This application can be built to notify the remote application using inter-core
+interrupts (default behavior) or to transmit without notifying the remote
+application. If the latter is used, the remote application polls for available
+messages.
+
+This application is controlled from console via a sysfs file (see Running the
+Application).
 
 Prerequisites
 =============
- - EVB board for supported processors: S32V234, S32G274A and S32R45X
+ - EVB board for supported processors: S32V234 and S32GEN1
  - NXP Automotive Linux BSP
 
 Building the application
@@ -31,25 +38,54 @@ Note: modules are also included in NXP Auto Linux BSP pre-built images that can
 
 Building with Yocto
 -------------------
-Follow the steps for building NXP Auto Linux BSP with Yocto:
- - https://source.codeaurora.org/external/autobsps32/auto_yocto_bsp/tree/README?h=alb/master
+Follow the steps for building NXP Auto Linux BSP with Yocto::
 
-Note: use image fsl-image-auto with any of the following machines supported for IPCF:
-      s32g274aevb, s32r45xevb, s32v234evb.
+   Linux BSP User Manual from Flexera catalog
+
+* for S32V234 use branch release/bsp23.0 and modify in
+  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+
+    - SRCREV = "af9a41d262a57a2c3f4be0f4042adc10b47ffdd6"
+    + SRCREV = "a32bb41885c21fd440385c2a382a672d40d2397f"
+
+    + KERNEL_MODULE_PROBECONF += "ipc-shm-uio"
+    + module_conf_ipc-shm-uio = "blacklist ipc-shm-uio"
+    + FILES_${PN} += "${sysconfdir}/modprobe.d/*"
+
+* for S32GEN1 use branch release/**IPCF_RELEASE_NAME** and modify in
+  build/sources/meta-alb/recipes-kernel/ipc-shm/ipc-shm.bb::
+
+    - BRANCH ?= "${RELEASE_BASE}"
+    + BRANCH ?= "release/**IPCF_RELEASE_NAME**"
+
+    - SRCREV = "xxxxxxxxxx"
+    + SRCREV = "${AUTOREV}"
+
+  where **IPCF_RELEASE_NAME** is the name of Inter-Platform Communication
+  Framework release from Flexera catalog and replace the line with SRCREV
+  with SRCREV = "${AUTOREV}".
+
+Note: use image **fsl-image-auto** with any of the following machines supported
+      for IPCF: s32g274aevb, s32r45xevb, s32v234evb.
 
 Building manually
 -----------------
-- Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
+1. Get NXP Auto Linux kernel and IPCF driver from Code Aurora::
 
-   git clone https://source.codeaurora.org/external/autobsps32/linux/
-   git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
+    git clone https://source.codeaurora.org/external/autobsps32/linux/
+    git clone https://source.codeaurora.org/external/autobsps32/ipcf/ipc-shm/
 
-- Export CROSS_COMPILE variable and build modules providing kernel source
-  location, e.g.::
+2. Export CROSS_COMPILE and ARCH variables and build Linux kernel providing the
+   desired config::
 
-   export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
-   make -C ./linux
-   make -C ./ipc-shm/sample KERNELDIR=./linux modules
+    export CROSS_COMPILE=/<toolchain-path>/aarch64-linux-gnu-
+    export ARCH=arm64
+    make -C ./linux s32gen1_defconfig
+    make -C ./linux
+
+3. Build IPCF driver and sample modules providing kernel source location, e.g.::
+
+    make -C ./ipc-shm/sample KERNELDIR=$PWD/linux modules
 
 .. _run-shm-linux:
 
@@ -79,3 +115,19 @@ Running the application
 7. Unload the modules::
 
     rmmod ipc-shm-sample ipc-shm-dev
+
+Configuration Notes
+===================
+
+Polling
+-------
+In order to compile the shared memory sample application with polling support,
+the makefile parameter ``POLLING`` must be set to ``yes``, e.g.::
+
+    make -C ./ipc-shm/sample POLLING=yes KERNELDIR=$PWD/linux modules
+
+Note: the remote sample application must be built with polling support as well.
+Please refer to the remote sample build instructions for more details.
+
+This sample demonstrates how shared memory polling API can be used to poll for
+incoming messages instead of using inter-core interrupts notifications.
