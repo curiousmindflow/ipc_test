@@ -1,0 +1,38 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                // /home/alex/dev/yocto_bin/fsl-auto-yocto-bsp/
+                // ./build_s32g274ardb2ubuntu/tmp/work/aarch64-fsl-linux/linux-libc-headers/5.8-r0/linux-5.8/include/generated
+
+                "/home/alex/dev/yocto_bin/fsl-auto-yocto-bsp/./build_s32g274ardb2ubuntu/tmp/work/aarch64-fsl-linux/linux-libc-headers/5.8-r0/linux-5.8/include/**",
+                "/home/alex/dev/yocto_bin/fsl-auto-yocto-bsp/./build_s32g274ardb2ubuntu/tmp/work/aarch64-fsl-linux/linux-libc-headers/5.8-r0/linux-5.8/include/generated/**",
+
+                "/usr/src/**",
+
+                "/usr/lib/gcc/**"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "MODULE"
+            ],
+            "compilerPath": "/bin/gcc",
+            "compilerArgs": [
+                "-nostdinc",
+                "-include",
+                "/home/alex/dev/yocto_bin/fsl-auto-yocto-bsp/build_s32g274ardb2ubuntu/tmp/work/aarch64-fsl-linux/linux-libc-headers/5.8-r0/linux-5.8/include/kobject.h"
+                // "/usr/src/linux-headers-5.4.0-105-generic/include/linux/kconfig.h",
+                // "-include",
+                // "/usr/src/linux-headers-5.4.0-105-generic/include/linux/compiler_types.h",
+                // "-include",
+                // "/usr/src/linux-headers-5.4.0-105-generic/**"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}

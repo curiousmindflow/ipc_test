@@ -1,0 +1,10 @@
+env variables:
+ARCH=arm64
+CROSS_COMPILE=aarch64-linux-gnu-
+
+compile kernel:
+sudo ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make -j6 -C ./linux all
+
+compile module:
+make -j6 -C /home/alex/dev/s32g2/ipc-shm/sample/ KERNELDIR=/home/alex/dev/s32g2/linux modules
+make -j6 -C /home/alex/dev/s32g2/ipc-shm/sample/ KERNELDIR=/home/alex/dev/yocto_bin/fsl-auto-yocto-bsp/build_s32g274ardb2/tmp/work-shared/s32g274ardb2/kernel-build-artifacts modules

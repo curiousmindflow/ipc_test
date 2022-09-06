@@ -404,6 +404,10 @@ static void free_sysfs(void)
 	kobject_put(app.ipc_kobj);
 }
 
+//
+// KERNEL MODULE IMPERATIVE CODE
+//
+
 static int __init sample_mod_init(void)
 {
 	int err = 0;
@@ -433,3 +437,7 @@ static void __exit sample_mod_exit(void)
 
 module_init(sample_mod_init);
 module_exit(sample_mod_exit);
+
+//
+// KERNEL MODULE IMPERATIVE CODE: END
+//
